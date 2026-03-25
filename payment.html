@@ -320,6 +320,7 @@
     let paymentElement;
     let clientSecret;
     let elements;
+    let paymentReady = false; // Flag um Zweiphasen-Flow zu tracken
 
     // Formular-Referenzen
     const form = document.getElementById('paymentForm');
@@ -363,6 +364,8 @@
             currency: 'eur',
             description: `${product.name}`,
             metadata: {
+              email: document.getElementById('email').value,
+              name: document.getElementById('name').value,
               serviceType: product.name,
               serviceCode
             }
@@ -386,23 +389,45 @@
       }
     }
 
-    // Initialisiere beim Laden
-    initializePayment();
-
-    // Form Submit
+    // Form Submit mit Zweiphasen-Flow
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
 
       const email = document.getElementById('email').value;
       const name = document.getElementById('name').value;
 
-      // Validierung
-      if (!email || !name) {
-        if (!email) emailError.textContent = 'E-Mail erforderlich';
-        if (!name) nameError.textContent = 'Name erforderlich';
-        return;
+      // PHASE 1: Payment Element laden
+      if (!paymentReady) {
+        // Validierung
+        if (!email || !name) {
+          if (!email) emailError.textContent = 'E-Mail erforderlich';
+          if (!name) nameError.textContent = 'Name erforderlich';
+          return;
+        }
+
+        submitBtn.disabled = true;
+        document.getElementById('buttonText').innerHTML = '<span class="spinner"></span>Wird vorbereitet...';
+
+        try {
+          // Payment Intent MIT gefüllten Email/Name Daten erstellen
+          await initializePayment();
+          paymentReady = true;
+
+          // Button ist jetzt bereit für Zahlungsbestätigung
+          submitBtn.disabled = false;
+          document.getElementById('buttonText').textContent = 'Zahlung bestätigen';
+          return;
+        } catch (error) {
+          paymentError.textContent = error.message;
+          paymentError.classList.add('show');
+          submitBtn.disabled = false;
+          document.getElementById('buttonText').textContent = 'Jetzt zahlen';
+          paymentReady = false;
+          return;
+        }
       }
 
+      // PHASE 2: Zahlung bestätigen
       submitBtn.disabled = true;
       document.getElementById('buttonText').innerHTML = '<span class="spinner"></span>Verarbeite...';
 
@@ -427,14 +452,16 @@
           paymentError.textContent = result.error.message;
           paymentError.classList.add('show');
           submitBtn.disabled = false;
-          document.getElementById('buttonText').textContent = 'Jetzt zahlen';
+          document.getElementById('buttonText').textContent = 'Zahlung bestätigen';
+          paymentReady = true;
         }
         // Bei erfolgreicher Zahlung wird der User zur return_url weitergeleitet
       } catch (error) {
         paymentError.textContent = error.message;
         paymentError.classList.add('show');
         submitBtn.disabled = false;
-        document.getElementById('buttonText').textContent = 'Jetzt zahlen';
+        document.getElementById('buttonText').textContent = 'Zahlung bestätigen';
+        paymentReady = true;
       }
     });
 
